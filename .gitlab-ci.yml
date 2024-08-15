@@ -1,0 +1,72 @@
+stages:
+  - styleguides
+  - tests
+  - badges
+  - build
+
+.runner-image:
+  image: dockerhub.harbor.rnds.pro/dockerhub/rnds/gitlab-runner:latest
+  variables:
+    COMPOSE_PROJECT_NAME: net-smtp-ntlm_${CI_PIPELINE_ID}_${CI_JOB_ID}
+    GIT_BRANCH: ${CI_COMMIT_REF_NAME}
+    GIT_COMMIT: ${CI_COMMIT_SHA}
+
+.test:
+  extends: .runner-image
+  stage: tests
+  script:
+    - docker-compose build --force-rm --pull test-${CASE}
+    - docker-compose up --force-recreate -t 1 --remove-orphans -d test-${CASE}
+    - docker-compose exec -T test-${CASE} bundle exec rake test > test-${CASE}.log
+  after_script:
+    - docker-compose down -v --remove-orphans
+  coverage: '/\(\d+.\d+\%\) covered/'
+  artifacts:
+    reports:
+      junit: test*.log
+    name: "coverage"
+    paths:
+      - .coverage
+
+ruby-2.7:
+  extends: .test
+  variables:
+    CASE: '2.7'
+
+ruby-3.0:
+  extends: .test
+  variables:
+    CASE: '3.0'
+
+badges:
+  extends: .runner-image
+  stage: badges
+  allow_failure: true
+  variables:
+    BRANCH_LOCK: ci/${CI_PROJECT_NAME}/${CI_COMMIT_REF_SLUG}
+    ENV_LOCK: ci/${CI_PROJECT_NAME}/${CI_ENVIRONMENT_SLUG}
+    BADGES_URL: https://lysander.rnds.pro/api/v1/badges/net-smtp-ntlm
+    URL: https://br.rnds.pro/rnds/net-smtp-ntlm
+  script:
+    - bundle config set --local path 'vendor/bundle'
+    - bundle install --jobs=3
+    - bundle audit update
+    - bundle audit || true
+    - bundle outdated --only-explicit --no-pre --group default || true
+    - vulnerable=$(bundle audit | grep "Name:" | sort | uniq | wc -l) || true
+    - outdated=$(bundle outdated --only-explicit --no-pre --group default | grep "*" | wc -l) || true
+    - quality=$(rubycritic -f lint lib | tail -n 1 | cut -d ' ' -f2) || true
+    - coverage=$(cat .coverage | ruby -e 'puts /\((\d+.\d+)\%\) covered/.match(STDIN.read)[1]') || true
+    - curl -X PUT -m 3 --oauth2-bearer ${BADGE_TOKEN} -H "Content-Type:application/json" -d "{\"badge\":{\"label\":\"coverage\", \"color\":\"green\", \"message\":\"${coverage}%\", \"redirect_url\":\"${URL}\"}}" "${BADGES_URL}_covarage.json" || true
+    - curl -X PUT -m 3 --oauth2-bearer ${BADGE_TOKEN} -H "Content-Type:application/json" -d "{\"badge\":{\"label\":\"vulnerable\", \"color\":\"red\", \"message\":\"${vulnerable} gems\", \"redirect_url\":\"${URL}\"}}" "${BADGES_URL}_vulnerable.json" || true
+    - curl -X PUT -m 3 --oauth2-bearer ${BADGE_TOKEN} -H "Content-Type:application/json" -d "{\"badge\":{\"label\":\"outdated\", \"color\":\"orange\", \"message\":\"${outdated} gems\", \"redirect_url\":\"${URL}\"}}" "${BADGES_URL}_outdated.json" || true
+    - curl -X PUT -m 3 --oauth2-bearer ${BADGE_TOKEN} -H "Content-Type:application/json" -d "{\"badge\":{\"label\":\"quality\", \"color\":\"lightgray\", \"message\":\"${quality}%\", \"redirect_url\":\"${URL}\"}}" "${BADGES_URL}_quality.json" || true
+  only:
+    - master
+
+build_gem:
+  extends: .runner-image
+  stage: build
+  when: manual
+  script:
+    - /bin/bash build_and_upload_nexus.sh ${NEXUS_USER} ${NEXUS_PASS}

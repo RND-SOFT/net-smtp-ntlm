@@ -1,0 +1,21 @@
+version: "2.3"
+
+services:
+  test-2.7:
+    build:
+      context: .
+      args:
+        RUBY_VERSION: 2.7
+    image: net-smtp-ntlm-tests:2.7
+    working_dir: /home/app
+
+  test-3.0:
+    build:
+      context: .
+      args:
+        RUBY_VERSION: 3.0
+    image: net-smtp-ntlm-tests:3.0
+    working_dir: /home/app
+
+
+

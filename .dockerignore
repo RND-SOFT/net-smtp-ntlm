@@ -1,0 +1,12 @@
+*.gem
+log/*
+tmp/*
+doc/*
+envs/*
+coverage/*
+Dockerfile*
+docker-compose*
+rspec*
+
+.gitignore
+.gitlab-ci.yml

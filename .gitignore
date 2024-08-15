@@ -1,0 +1,15 @@
+*.swp
+*.swo
+*.pdf
+*.crt
+*.cer
+*.key
+*.pkcs
+*.pk8
+
+.bundle/
+.idea
+coverage
+.byebug_history
+.coverage
+rspec*

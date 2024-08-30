@@ -52,7 +52,7 @@ module Net::SMTP::NTLM
       keys = create_des_keys(key[0, key_length])
 
       result = ''
-      cipher = OpenSSL::Cipher::DES.new
+      cipher = OpenSSL::Cipher.new('des-ecb')
       keys.each do |k|
         cipher.encrypt
         cipher.key = k
